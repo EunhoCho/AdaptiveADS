@@ -1,0 +1,21 @@
+{
+  "id": "TransFuserAllNLayer4NoVelocityTPReg32Reg32Seed1",
+  "device": "cuda",
+  "epochs": 41,
+  "lr": 0.0001,
+  "val_every": 1,
+  "batch_size": 12,
+  "logdir": "/mnt/qb/geiger/bjaeger25/training_logdir/TransFuserAllNLayer4NoVelocityTPReg32Reg32Seed1",
+  "load_file": null,
+  "machine": 9,
+  "schedule": 1,
+  "local_rank": 0,
+  "backbone": "transFuser",
+  "image_architecture": "regnety_032",
+  "lidar_architecture": "regnety_032",
+  "use_velocity": 0,
+  "n_layer": 4,
+  "num_transformer": 4,
+  "wp_only": 0,
+  "use_target_point_image": 1
+}
