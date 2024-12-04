@@ -15,7 +15,6 @@ export RESUME=1
 export TEAM_CONFIG=${WORK_DIR}/model_ckpt
 
 export AGENT="$1"
-export CHECKPOINT_ENDPOINT=${WORK_DIR}/results/${AGENT}_longest6.json
 export TEAM_AGENT=${WORK_DIR}/transfuser/${AGENT}_agent.py
 
 export PORT="$2"
@@ -25,8 +24,11 @@ export SCENARIO_NAME="$4"
 export ROUTES=${WORK_DIR}/leaderboard/data/routes/${ROUTE_NAME}.xml
 export SCENARIOS=${WORK_DIR}/leaderboard/data/scenarios/${SCENARIO_NAME}.json
 
+export CHECKPOINT_ENDPOINT=${WORK_DIR}/results/${AGENT}_${ROUTE_NAME}.json
+
 python3 leaderboard/leaderboard/leaderboard_evaluator.py \
 --port=${PORT} \
+--trafficManagerPort=1${PORT} \
 --routes=${ROUTES} \
 --scenarios=${SCENARIOS}  \
 --agent=${TEAM_AGENT} \

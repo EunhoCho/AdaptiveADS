@@ -316,7 +316,6 @@ class RouteParser(object):
 
             scenarios = world_annotations[town_name]
             for scenario in scenarios:  # For each existent scenario
-                print('load')
                 scenario_name = scenario["scenario_type"]
                 for event in scenario["available_event_configurations"]:
                     waypoint = event['transform']  # trigger point of this scenario

@@ -1,11 +1,5 @@
 # AdaptiveADS
 
-### Run Carla Server
-```shell
-sudo docker pull carlasim/carla:0.9.10.1
-sudo docker run -e SDL_VIDEODRIVER=offscreen -e SDL_HINT_CUDA_DEVICE=0 -p 2000-2002:2000-2002 -itd --name carla --rm --gpus all carlasim/carla:0.9.10.1 ./CarlaUE4.sh -world-port=2000 -opengl
-```
-
 ### Setup Conda Env
 ```shell
 git clone https://github.com/EunhoCho/AdaptiveADS
@@ -24,5 +18,31 @@ pip install mmcv-full==1.5.3 -f https://download.openmmlab.com/mmcv/dist/cu113/t
 pip install setuptools==41
 easy_install carla/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg
 pip3 install setuptools==68
+
+sudo docker pull carlasim/carla:0.9.10.1
+sudo docker run -e SDL_VIDEODRIVER=offscreen -e SDL_HINT_CUDA_DEVICE=0 -p 2000-2002:2000-2002 -it --name carla --rm --gpus all carlasim/carla:0.9.10.1 /bin/bash
 ```
 
+Turn on another terminal session and execute.
+```shell
+docker cp carla/AdditionalMaps_0.9.10.1.tar.gz carla:/home/carla/
+```
+
+Return to the original terminal session and execute.
+```shell
+tar -xf AdditionalMaps_0.9.10.1.tar.gz
+./ImportAssets.sh
+```
+
+Return to the another terminal and execute.
+```shell
+docker commit carla carla:0.9.10.1.1
+```
+
+Return to the original terminal session and execute.
+```shell
+exit
+docker run -e SDL_VIDEODRIVER=offscreen -e SDL_HINT_CUDA_DEVICE=0 -p 2000-2002:2000-2002 -itd --name carla --rm --gpus all carla:0.9.10.1.1 ./CarlaUE4.sh -world-port=2000 -opengl
+docker run -e SDL_VIDEODRIVER=offscreen -e SDL_HINT_CUDA_DEVICE=0 -p 2100-2102:2100-2102 -itd --name carla2 --rm --gpus all carla:0.9.10.1.1 ./CarlaUE4.sh -world-port=2100 -opengl
+docker run -e SDL_VIDEODRIVER=offscreen -e SDL_HINT_CUDA_DEVICE=0 -p 2200-2202:2200-2202 -itd --name carla3 --rm --gpus all carla:0.9.10.1.1 ./CarlaUE4.sh -world-port=2200 -opengl
+```

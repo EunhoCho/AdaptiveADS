@@ -13,10 +13,12 @@ import torch
 from PIL import Image
 from shapely.geometry import Polygon
 
+from agents.navigation.basic_agent import BasicAgent
 from config import GlobalConfig
 from data import lidar_to_histogram_features, draw_target_point, lidar_bev_cam_correspondences
 from leaderboard.autoagents import autonomous_agent
 from model import LidarCenterNet
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 SAVE_PATH = os.environ.get('SAVE_PATH')
 
@@ -249,10 +251,58 @@ class HybridAgent(autonomous_agent.AutonomousAgent):
         self.steer_damping = self.config.steer_damping
         self.rgb_back = None  # For debugging
 
+        self._route_assigned = False
+        self._agent = None
+
+        self.junction_range = 50
+
     def _init(self):
         self._route_planner = RoutePlanner(self.config.route_planner_min_distance,
                                            self.config.route_planner_max_distance)
         self._route_planner.set_route(self._global_plan, True)
+
+        if not self._agent:
+            hero_actor = None
+            for actor in CarlaDataProvider.get_world().get_actors():
+                if 'role_name' in actor.attributes and actor.attributes['role_name'] == 'hero':
+                    hero_actor = actor
+                    break
+            if hero_actor:
+                self._agent = BasicAgent(hero_actor)
+
+        if not self._route_assigned:
+            if self._global_plan:
+                plan = []
+
+                for transform, road_option in self._global_plan_world_coord:
+                    wp = CarlaDataProvider.get_map().get_waypoint(transform.location)
+                    plan.append((wp, road_option))
+
+                self._agent._local_planner.set_global_plan(plan)  # pylint: disable=protected-access
+                self._route_assigned = True
+
+        self._vehicle = self._agent._vehicle
+        self._world = self._vehicle.get_world()
+        self._map = self._world.get_map()
+
+        self.near_junction = -2 * self.junction_range
+        ego_vehicle_loc = self._vehicle.get_location()
+        current_wp = self._map.get_waypoint(ego_vehicle_loc)
+        for i in range(-1 * self.junction_range, self.junction_range + 5, 5):
+            if i == 0:
+                continue
+
+            if i < 0:
+                wp_list = current_wp.previous(-1 * i)
+            else:
+                wp_list = current_wp.next(i)
+
+            for wp in wp_list:
+                if wp.is_junction or wp.is_intersection:
+                    self.near_junction = i
+
+        self.previous_loc = ego_vehicle_loc
+
         self.initialized = True
 
     def _get_position(self, tick_data):
@@ -379,7 +429,40 @@ class HybridAgent(autonomous_agent.AutonomousAgent):
 
         return result
 
-    @torch.inference_mode()  # Faster version of torch_no_grad
+    def is_near_junction(self):
+        ego_vehicle_loc = self._vehicle.get_location()
+        current_wp = self._map.get_waypoint(ego_vehicle_loc)
+
+        wp_list = current_wp.next(self.junction_range)
+
+        for wp in wp_list:
+            if wp.is_junction or wp.is_intersection:
+                self.near_junction = self.junction_range
+                self.previous_loc = ego_vehicle_loc
+                return True
+
+        distance = self.previous_loc.distance(ego_vehicle_loc)
+        self.near_junction -= distance
+        self.previous_loc = ego_vehicle_loc
+
+        if self.near_junction >= -1 * self.junction_range:
+            return True
+
+        return False
+
+    def update_route_planner(self):
+        target_planner = self._agent._local_planner
+        vehicle_transform = self._vehicle.get_transform()
+
+        max_index = -1
+
+        for i, (waypoint, _) in enumerate(target_planner._waypoint_buffer):
+            if waypoint.transform.location.distance(vehicle_transform.location) < target_planner._min_distance:
+                max_index = i
+        if max_index >= 0:
+            for i in range(max_index + 1):
+                target_planner._waypoint_buffer.popleft()
+
     def run_step(self, input_data, timestamp):
         self.step += 1
 
@@ -391,14 +474,29 @@ class HybridAgent(autonomous_agent.AutonomousAgent):
             control.brake = 1.0
             self.control = control
 
-            # Need to run this every step for GPS denoising
+        # Need to run this every step for GPS denoising
         tick_data = self.tick(input_data)
+        self.update_route_planner()
 
         # repeat actions twice to ensure LiDAR data availability
         if self.step % self.config.action_repeat == 1:
             self.update_gps_buffer(self.control, tick_data['compass'], tick_data['speed'])
             return self.control
 
+        # Basic
+        self.control = self._agent.run_step()
+
+        if self.is_near_junction():
+            self.control = self.run_step_transfuser(input_data, tick_data)
+        else:
+            self.control = self._agent.run_step()
+
+        self.update_gps_buffer(self.control, tick_data['compass'], tick_data['speed'])
+
+        return self.control
+
+    @torch.inference_mode()  # Faster version of torch_no_grad
+    def run_step_transfuser(self, input_data, tick_data):
         # prepare image input
         image = self.prepare_image(tick_data)
 
@@ -540,9 +638,6 @@ class HybridAgent(autonomous_agent.AutonomousAgent):
                 control.brake = float(True)
                 # Will overwrite the stuck detector. If we are stuck in traffic we do want to wait it out.
 
-        self.control = control
-
-        self.update_gps_buffer(self.control, tick_data['compass'], tick_data['speed'])
         return control
 
     def bb_detected_in_front_of_vehicle(self, ego_speed):
