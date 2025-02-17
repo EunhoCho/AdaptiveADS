@@ -96,7 +96,7 @@ class ScenarioManager(object):
         self.end_system_time = None
         self.end_game_time = None
 
-    def load_scenario(self, scenario, agent, rep_number):
+    def load_scenario(self, scenario, agent, rep_number, drivers_config):
         """
         Load a new scenario
         """
@@ -113,7 +113,7 @@ class ScenarioManager(object):
         # To print the scenario tree uncomment the next line
         # py_trees.display.render_dot_tree(self.scenario_tree)
 
-        self._agent.setup_sensors(self.ego_vehicles[0], self._debug_mode)
+        self._agent.setup_sensors(self.ego_vehicles[0], self._debug_mode, drivers_config)
 
     def run_scenario(self):
         """

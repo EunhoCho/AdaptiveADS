@@ -2,6 +2,7 @@ import copy
 import logging
 import numpy as np
 import os
+import cv2
 import time
 from threading import Thread
 
@@ -131,13 +132,18 @@ class OpenDriveMapReader(BaseReader):
 
 
 class CallBack(object):
-    def __init__(self, tag, sensor_type, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider, dms=None):
         self._tag = tag
         self._data_provider = data_provider
+        self._dms = dms
+        self.past_state = "Normal"
+        self.past_image = cv2.imread('normal_image.jpg')
 
         self._data_provider.register_sensor(tag, sensor_type, sensor)
 
     def __call__(self, data):
+        if self._dms is not None:
+            self._parse_dms(self._tag)
         if isinstance(data, carla.libcarla.Image):
             self._parse_image_cb(data, self._tag)
         elif isinstance(data, carla.libcarla.LidarMeasurement):
@@ -154,6 +160,37 @@ class CallBack(object):
             self._parse_pseudosensor(data, self._tag)
         else:
             logging.error('No callback method for this sensor.')
+
+    def _parse_dms(self, tag):
+        time = GameTime.get_time()
+
+        if self.past_state == 'drowsiness':
+            normal_image = cv2.imread('dms_images/normal_image.jpg')
+            drowsiness_image = self.past_image
+            distracted_image = cv2.imread('dms_images/distracted_image.jpg')
+        elif self.past_state == 'distracted':
+            normal_image = cv2.imread('dms_images/normal_image.jpg')
+            drowsiness_image = cv2.imread('dms_images/drowsiness_image.png')
+            distracted_image = self.past_image
+        else:
+            normal_image = self.past_image
+            drowsiness_image = cv2.imread('dms_images/drowsiness_image.png')
+            distracted_image = cv2.imread('dms_images/distracted_image.jpg')
+
+        done = False
+        for driver in self._dms:
+            if driver[1] <= time < driver[2]:
+                done = True
+                if driver[0] == 'drowsiness':
+                    past_image = drowsiness_image
+                    self._data_provider.update_sensor(tag, drowsiness_image, drowsiness_image)
+                elif driver[0] == 'distracted':
+                    past_image = distracted_image
+                    self._data_provider.update_sensor(tag, distracted_image, distracted_image)
+
+        if not done:
+            past_image = normal_image
+            self._data_provider.update_sensor(tag, normal_image, normal_image)
 
     # Parsing CARLA physical Sensors
     def _parse_image_cb(self, image, tag):

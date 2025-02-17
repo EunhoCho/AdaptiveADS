@@ -81,6 +81,7 @@ class RouteParser(object):
             new_config = RouteScenarioConfiguration()
             new_config.town = route.attrib['town']
             new_config.name = "RouteScenario_{}".format(route_id)
+            new_config.drivers = RouteParser.parse_drivers(route)
             new_config.weather = RouteParser.parse_weather(route) # default: parse_weather(route)
             new_config.scenario_file = scenario_file
 
@@ -95,6 +96,19 @@ class RouteParser(object):
             list_route_descriptions.append(new_config)
 
         return list_route_descriptions
+
+    @staticmethod
+    def parse_drivers(route):
+        route_drivers = route.find("drivers")
+        if route_drivers is None:
+            return []
+
+        drivers = []
+        for driver in route_drivers.iter("driver"):
+            drivers.append([driver.attrib['status'], int(driver.attrib['time']), int(driver.attrib['time']) + int(driver.attrib['duration'])])
+
+        return drivers
+
 
     @staticmethod
     def parse_weather(route):

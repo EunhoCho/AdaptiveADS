@@ -326,7 +326,7 @@ class LeaderboardEvaluator(object):
             # Load scenario and run it
             if args.record:
                 self.client.start_recorder("{}/{}_rep{}.log".format(args.record, config.name, config.repetition_index))
-            self.manager.load_scenario(scenario, self.agent_instance, config.repetition_index)
+            self.manager.load_scenario(scenario, self.agent_instance, config.repetition_index, config.drivers)
 
         except Exception as e:
             # The scenario is wrong -> set the ejecution to crashed and stop
